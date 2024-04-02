@@ -9,6 +9,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
+            overflow: hidden; /* Prevent scrolling */
         }
         #video-container {
             width: 100%;
@@ -17,11 +18,15 @@
             justify-content: center;
             align-items: center;
             background-color: #f0f0f0; /* Optional: Add a background color */
+            position: relative;
         }
         video {
-            width: 100%;
+            width: auto;
             height: auto;
-            object-fit: cover; /* Cover the entire video container */
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* Maintain aspect ratio */
+            transform: scaleX(-1); /* Flip the video horizontally */
         }
     </style>
 </head>
@@ -32,14 +37,46 @@
 
     <script>
         const video = document.getElementById('video');
+        const videoContainer = document.getElementById('video-container');
+
+        function resizeVideo() {
+            const aspectRatio = video.videoWidth / video.videoHeight;
+            const containerAspectRatio = videoContainer.offsetWidth / videoContainer.offsetHeight;
+
+            if (aspectRatio > containerAspectRatio) {
+                video.style.width = '100%';
+                video.style.height = 'auto';
+            } else {
+                video.style.width = 'auto';
+                video.style.height = '100%';
+            }
+        }
+
+        window.addEventListener('resize', resizeVideo);
+        video.addEventListener('loadedmetadata', resizeVideo);
 
         // Check if the browser supports WebRTC
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            // Access the user's camera with maximum resolution
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 4096 }, height: { ideal: 2160 } } })
+            navigator.mediaDevices.getUserMedia({ video: true })
                 .then(function (stream) {
-                    // Display the video stream in the video element
-                    video.srcObject = stream;
+                    const track = stream.getVideoTracks()[0];
+                    const capabilities = track.getCapabilities();
+
+                    if (capabilities.aspectRatio) {
+                        const aspectRatio = capabilities.aspectRatio;
+                        const width = Math.round(640 * aspectRatio); // You can adjust the initial width here
+                        const height = 640; // You can adjust the initial height here
+                        const videoConstraints = { width: { ideal: width }, height: { ideal: height } };
+                        
+                        navigator.mediaDevices.getUserMedia({ video: videoConstraints })
+                            .then(function (stream) {
+                                // Display the video stream in the video element
+                                video.srcObject = stream;
+                            })
+                            .catch(function (error) {
+                                console.error('Error accessing camera:', error);
+                            });
+                    }
                 })
                 .catch(function (error) {
                     console.error('Error accessing camera:', error);
