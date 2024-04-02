@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera App</title>
+    <style>
+        #video-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        video {
+            width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <video id="video" autoplay></video>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+
+        // Check if the browser supports WebRTC
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Access the user's camera
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function (stream) {
+                    // Display the video stream in the video element
+                    video.srcObject = stream;
+                })
+                .catch(function (error) {
+                    console.error('Error accessing camera:', error);
+                });
+        } else {
+            console.error('WebRTC is not supported in this browser.');
+        }
+    </script>
+</body>
+</html>
