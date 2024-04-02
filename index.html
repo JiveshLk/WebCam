@@ -28,20 +28,38 @@
             object-fit: contain; /* Maintain aspect ratio */
             transform: scaleX(-1); /* Flip the video horizontally */
         }
+        #debug-area {
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
     <div id="video-container">
         <video id="video" autoplay></video>
     </div>
+    <div id="debug-area"></div>
 
     <script>
         const video = document.getElementById('video');
         const videoContainer = document.getElementById('video-container');
+        const debugArea = document.getElementById('debug-area');
 
         function resizeVideo() {
             const aspectRatio = video.videoWidth / video.videoHeight;
             const containerAspectRatio = videoContainer.offsetWidth / videoContainer.offsetHeight;
+
+            debugArea.innerHTML = `
+                Aspect Ratio: ${aspectRatio.toFixed(2)}<br>
+                Container Aspect Ratio: ${containerAspectRatio.toFixed(2)}<br>
+                Video Dimensions: ${video.videoWidth}x${video.videoHeight}
+            `;
 
             if (aspectRatio > containerAspectRatio) {
                 video.style.width = '100%';
@@ -75,17 +93,18 @@
                             })
                             .catch(function (error) {
                                 console.error('Error accessing camera:', error);
+                                debugArea.innerHTML = `Error accessing camera: ${error.message}`;
                             });
                     }
                 })
                 .catch(function (error) {
                     console.error('Error accessing camera:', error);
+                    debugArea.innerHTML = `Error accessing camera: ${error.message}`;
                 });
         } else {
             console.error('WebRTC is not supported in this browser.');
+            debugArea.innerHTML = 'WebRTC is not supported in this browser.';
         }
     </script>
 </body>
 </html>
-
-
