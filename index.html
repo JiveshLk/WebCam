@@ -96,7 +96,7 @@
 
         async function getCameraStream() {
             try {
-                const constraints = { video: { width: 4096, height: 4096 } };
+                const constraints = { video: { width: 4096, height: 4096 }, facingMode: "user" };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video = document.createElement('video');
                 video.srcObject = stream;
