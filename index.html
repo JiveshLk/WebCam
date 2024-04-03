@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera App</title>
+    <title>Camera App with Shader</title>
     <style>
         body, html {
             margin: 0;
@@ -13,91 +13,226 @@
         }
         #video-container {
             width: 100%;
-            height: 100vh; /* Set initial height to full viewport height */
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: #f0f0f0; /* Optional: Add a background color */
+            background-color: #f0f0f0;
             position: relative;
         }
-        video {
-            width: auto;
-            height: auto;
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain; /* Maintain aspect ratio */
-            transform: scaleX(-1); /* Flip the video horizontally */
-        }
-        #debug-area {
-            position: fixed;
-            top: 0;
-            left: 0;
-            background-color: rgba(255, 255, 255, 0.7);
-            padding: 10px;
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-            z-index: 9999;
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Ensures canvas fills the screen */
         }
     </style>
 </head>
 <body>
     <div id="video-container">
-        <video id="video" autoplay></video>
+        <canvas id="glcanvas"></canvas>
     </div>
-    <div id="debug-area"></div>
 
     <script>
-        const video = document.getElementById('video');
-        const videoContainer = document.getElementById('video-container');
-        const debugArea = document.getElementById('debug-area');
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl');
+        let video;
 
-        function resizeVideo() {
-            const aspectRatio = video.videoWidth / video.videoHeight;
-            const containerAspectRatio = videoContainer.offsetWidth / videoContainer.offsetHeight;
+        if (!gl) {
+            alert('Unable to initialize WebGL. Your browser may not support it.');
+            throw new Error('WebGL not supported');
+        }
 
-            debugArea.innerHTML = `
-                Aspect Ratio: ${aspectRatio.toFixed(2)}<br>
-                Container Aspect Ratio: ${containerAspectRatio.toFixed(2)}<br>
-                Video Dimensions: ${video.videoWidth}x${video.videoHeight}
-            `;
+        // Vertex shader program
+        const vsSource = `
+            attribute vec4 vertexPosition;
+            attribute vec2 textureCoord;
+            varying highp vec2 vTextureCoord;
+            void main(void) {
+                gl_Position = vertexPosition;
+                vTextureCoord = textureCoord;
+            }
+        `;
 
-            if (aspectRatio > containerAspectRatio) {
-                video.style.width = '100%';
-                video.style.height = 'auto';
-            } else {
-                video.style.width = 'auto';
-                video.style.height = '100%';
+        // Fragment shader program, adapted from Shadertoy
+        const fsSource = `
+            precision highp float;
+            varying highp vec2 vTextureCoord;
+            uniform sampler2D uSampler;
+            uniform vec2 uResolution;
+            void main(void) {
+                vec2 uv = vTextureCoord;
+                vec3 baseColor = texture2D(uSampler, uv).rgb;
+
+                float blurRadius = 1.0 / uResolution.x;
+                float sigmaColor = 0.1;
+                float sigmaSpace = 0.015;
+
+                vec3 filteredColor = vec3(0.0);
+                float weightSum = 0.0;
+
+                for (int x = -4; x <= 4; x++) {
+                    for (int y = -4; y <= 4; y++) {
+                        vec2 offset = vec2(float(x), float(y)) * blurRadius;
+                        vec3 sampleColor = texture2D(uSampler, uv + offset).rgb;
+
+                        float colorDistance = distance(sampleColor, baseColor);
+                        float weightColor = exp(-(colorDistance * colorDistance) / (2.0 * sigmaColor * sigmaColor));
+
+                        float spatialDistance = length(offset);
+                        float weightSpace = exp(-(spatialDistance * spatialDistance) / (2.0 * sigmaSpace * sigmaSpace));
+
+                        float weight = weightColor * weightSpace;
+
+                        filteredColor += sampleColor * weight;
+                        weightSum += weight;
+                    }
+                }
+
+                filteredColor /= weightSum;
+
+                gl_FragColor = vec4(filteredColor, 1.0);
+            }
+        `;
+
+        async function getCameraStream() {
+            try {
+                const constraints = { video: { width: 1280, height: 720 } };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video = document.createElement('video');
+                video.srcObject = stream;
+                video.play();
+                video.onloadedmetadata = function() {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    initWebGL(video);
+                };
+            } catch (error) {
+                console.error('Error accessing camera:', error);
             }
         }
 
-        window.addEventListener('resize', resizeVideo);
-        video.addEventListener('loadedmetadata', function() {
-            resizeVideo();
-            setInterval(resizeVideo, 1000); // Update debug information every second
-        });
-
-        // Check if the browser supports WebRTC
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const constraints = {
-                video: {
-                    width: { ideal: 1920 },
-                    height: { ideal: 1920 }
-                }
+        function initWebGL(video) {
+            const shaderProgram = initShaderProgram(gl, vsSource, fsSource);
+            const buffers = initBuffers(gl);
+            const texture = initTexture(gl, video);
+            const programInfo = {
+                program: shaderProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(shaderProgram, 'vertexPosition'),
+                    textureCoord: gl.getAttribLocation(shaderProgram, 'textureCoord'),
+                },
+                uniformLocations: {
+                    uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
+                    uResolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
+                },
             };
 
-            navigator.mediaDevices.getUserMedia(constraints)
-                .then(function (stream) {
-                    // Display the video stream in the video element
-                    video.srcObject = stream;
-                })
-                .catch(function (error) {
-                    console.error('Error accessing camera:', error);
-                    debugArea.innerHTML = `Error accessing camera: ${error.message}`;
-                });
-        } else {
-            console.error('WebRTC is not supported in this browser.');
-            debugArea.innerHTML = 'WebRTC is not supported in this browser.';
+            function render() {
+                drawScene(gl, programInfo, buffers, texture, video);
+                requestAnimationFrame(render);
+            }
+            requestAnimationFrame(render);
         }
+
+        function initShaderProgram(gl, vsSource, fsSource) {
+            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vertexShader);
+            gl.attachShader(shaderProgram, fragmentShader);
+            gl.linkProgram(shaderProgram);
+
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                alert('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
+                return null;
+            }
+            return shaderProgram;
+        }
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                alert('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        function initBuffers(gl) {
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            const positions = [
+                -1.0,  1.0,
+                 1.0,  1.0,
+                -1.0, -1.0,
+                 1.0, -1.0,
+            ];
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+            const textureCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, textureCoordBuffer);
+            const textureCoordinates = [
+                1.0, 0.0, // Flip the texture horizontally
+                0.0, 0.0, // Flip the texture horizontally
+                1.0, 1.0, // Flip the texture horizontally
+                0.0, 1.0, // Flip the texture horizontally
+            ];
+
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates), gl.STATIC_DRAW);
+
+            return {
+                position: positionBuffer,
+                textureCoord: textureCoordBuffer,
+            };
+        }
+
+        function initTexture(gl, video) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+
+            return texture;
+        }
+
+        function drawScene(gl, programInfo, buffers, texture, video) {
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0.0, 0.0, 0.0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(programInfo.program);
+            gl.uniform2f(programInfo.uniformLocations.uResolution, canvas.width, canvas.height); // Set the resolution uniform
+
+            // Bind the position buffer.
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
+            gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+
+            // Bind the texture coordinate buffer.
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
+            gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+
+            // Specify the texture to map onto the faces.
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+
+            // Update the video texture for each frame.
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+
+            // Draw the rectangle.
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+
+        getCameraStream();
     </script>
 </body>
 </html>
