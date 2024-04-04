@@ -55,7 +55,7 @@
 
         // Fragment shader program, adapted from Shadertoy
         const fsSource = `
-            precision highp float;
+            precision mediump float;
             varying highp vec2 vTextureCoord;
             uniform sampler2D uSampler;
             uniform vec2 uResolution;
@@ -63,7 +63,7 @@
                 vec2 uv = vTextureCoord;
                 vec3 baseColor = texture2D(uSampler, uv).rgb;
 
-                float blurRadius = 1.1 / uResolution.x;
+                float blurRadius = 1.5 / uResolution.x;
                 float sigmaColor = 0.1;
                 float sigmaSpace = 0.015;
 
