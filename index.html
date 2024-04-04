@@ -31,6 +31,7 @@
     <div id="video-container">
         <canvas id="glcanvas"></canvas>
     </div>
+    <div id="debug-info" style="position: absolute; top: 0; left: 0; color: white; background: rgba(0,0,0,0.5); padding: 10px;"></div>
 
     <script>
         const canvas = document.getElementById('glcanvas');
@@ -53,23 +54,30 @@
             }
         `;
 
-        // Fragment shader program, adapted from Shadertoy
         const fsSource = `
             precision mediump float;
             varying mediump vec2 vTextureCoord;
             uniform sampler2D uSampler;
             uniform vec2 uResolution;
+
             void main(void) {
                 vec2 uv = vTextureCoord;
                 vec3 baseColor = texture2D(uSampler, uv).rgb;
 
-                float blurRadius = 2.0 / uResolution.x;
+                // Calculate the blur radius as a fraction of the canvas width
+                // Here, the blur effect is scaled relative to a reference resolution (e.g., 1280 pixels wide)
+                float referenceWidth = 1280.0;
+                float blurScale = uResolution.x / referenceWidth;
+                float blurRadius = (4.0 / referenceWidth) * blurScale;
+
+                // Parameters for the blur effect, potentially adjusted for responsiveness
                 float sigmaColor = 0.1;
-                float sigmaSpace = 0.015;
+                float sigmaSpace = 0.015 * blurScale; // Adjust sigmaSpace to scale with resolution
 
                 vec3 filteredColor = vec3(0.0);
                 float weightSum = 0.0;
 
+                // Loop over surrounding pixels within the blur radius
                 for (int x = -2; x <= 2; x++) {
                     for (int y = -2; y <= 2; y++) {
                         vec2 offset = vec2(float(x), float(y)) * blurRadius;
@@ -82,7 +90,6 @@
                         float weightSpace = exp(-(spatialDistance * spatialDistance) / (2.0 * sigmaSpace * sigmaSpace));
 
                         float weight = weightColor * weightSpace;
-
                         filteredColor += sampleColor * weight;
                         weightSum += weight;
                     }
@@ -93,6 +100,7 @@
                 gl_FragColor = vec4(filteredColor, 1.0);
             }
         `;
+
 
         async function getCameraStream() {
             try {
@@ -105,7 +113,9 @@
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     initWebGL(video);
+                    updateDebugInfo();
                 };
+                
             } catch (error) {
                 console.error('Error accessing camera:', error);
             }
@@ -132,6 +142,11 @@
                 requestAnimationFrame(render);
             }
             requestAnimationFrame(render);
+        }
+
+        function updateDebugInfo() {
+            const debugInfo = document.getElementById('debug-info');
+            debugInfo.textContent = `Canvas Width: ${canvas.width}px, Canvas Height: ${canvas.height}px`;
         }
 
         function initShaderProgram(gl, vsSource, fsSource) {
