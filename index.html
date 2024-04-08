@@ -58,26 +58,23 @@
             precision mediump float;
             varying mediump vec2 vTextureCoord;
             uniform sampler2D uSampler;
-            uniform vec2 uResolution;
+            // Removed the uResolution uniform as it's no longer needed
 
             void main(void) {
                 vec2 uv = vTextureCoord;
                 vec3 baseColor = texture2D(uSampler, uv).rgb;
 
-                // Calculate the blur radius as a fraction of the canvas width
-                // Here, the blur effect is scaled relative to a reference resolution (e.g., 1280 pixels wide)
-                float referenceWidth = 1280.0;
-                float blurScale = uResolution.x / referenceWidth;
-                float blurRadius = (.005) * blurScale;
+                // Use a fixed blur radius suitable for 1024x1024 texture
+                float blurRadius = 0.005; // Example fixed value, adjust as needed
 
-                // Parameters for the blur effect, potentially adjusted for responsiveness
+                // Parameters for the blur effect
                 float sigmaColor = 0.1;
-                float sigmaSpace = 0.015 * blurScale; // Adjust sigmaSpace to scale with resolution
+                float sigmaSpace = 0.015; // No longer scaled dynamically
 
                 vec3 filteredColor = vec3(0.0);
                 float weightSum = 0.0;
 
-                // Loop over surrounding pixels within the blur radius
+                // The loop remains unchanged
                 for (int x = -2; x <= 2; x++) {
                     for (int y = -2; y <= 2; y++) {
                         vec2 offset = vec2(float(x), float(y)) * blurRadius;
@@ -96,7 +93,6 @@
                 }
 
                 filteredColor /= weightSum;
-
                 gl_FragColor = vec4(filteredColor, 1.0);
             }
         `;
@@ -205,13 +201,21 @@
         }
 
         function initTexture(gl, video) {
+            const offScreenCanvas = document.createElement('canvas');
+            offScreenCanvas.width = 1024;
+            offScreenCanvas.height = 1024;
+
+            // Drawing video frame to offScreenCanvas to resize it
+            const ctx = offScreenCanvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, 1024, 1024);
+
             const texture = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, texture);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+            // Use the off-screen canvas as the source for the texture
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offScreenCanvas);
 
             return texture;
         }
