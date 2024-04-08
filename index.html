@@ -68,7 +68,7 @@
                 // Here, the blur effect is scaled relative to a reference resolution (e.g., 1280 pixels wide)
                 float referenceWidth = 1280.0;
                 float blurScale = uResolution.x / referenceWidth;
-                float blurRadius = (4.0 / referenceWidth) * blurScale;
+                float blurRadius = (2.0 / uResolution.x) * blurScale;
 
                 // Parameters for the blur effect, potentially adjusted for responsiveness
                 float sigmaColor = 0.1;
