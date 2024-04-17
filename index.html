@@ -32,7 +32,12 @@
         <canvas id="glcanvas"></canvas>
     </div>
     <div id="debug-info" style="position: absolute; top: 0; left: 0; color: white; background: rgba(0,0,0,0.5); padding: 10px;"></div>
-
+    <div style="position: absolute; top: 20px; left: 20px; z-index: 10;">
+        <label>Brightness: <input type="range" id="brightness" min="-1.0" max="1.0" step="0.01" value="0"></label><br>
+        <label>Contrast: <input type="range" id="contrast" min="0.5" max="2.0" step="0.1" value="1.0"></label><br>
+        <label>Saturation: <input type="range" id="saturation" min="0" max="2" step="0.1" value="1"></label>
+    </div>
+    
     <script>
         const canvas = document.getElementById('glcanvas');
         const gl = canvas.getContext('webgl');
@@ -58,6 +63,10 @@
             precision mediump float;
             varying mediump vec2 vTextureCoord;
             uniform sampler2D uSampler;
+            uniform float brightness;
+            uniform float contrast;
+            uniform float saturation;
+
             // Removed the uResolution uniform as it's no longer needed
 
             void main(void) {
@@ -93,9 +102,24 @@
                 }
 
                 filteredColor /= weightSum;
+                // Apply contrast
+                filteredColor = (filteredColor - 0.5) * contrast + 0.5;
+
+                // Apply brightness
+                filteredColor += brightness;
+
+                // Apply saturation
+                float gray = dot(filteredColor, vec3(0.299, 0.587, 0.114));
+                filteredColor = mix(vec3(gray), filteredColor, saturation);
+
                 gl_FragColor = vec4(filteredColor, 1.0);
             }
         `;
+        
+                // After initializing the shader program
+        
+
+        
 
 
         async function getCameraStream() {
@@ -130,19 +154,53 @@
                 uniformLocations: {
                     uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
                     uResolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
+                    brightness: gl.getUniformLocation(shaderProgram, 'brightness'),
+                    contrast: gl.getUniformLocation(shaderProgram, 'contrast'),
+                    saturation: gl.getUniformLocation(shaderProgram, 'saturation')
                 },
             };
+            
+            gl.uniform1f(programInfo.uniformLocations.brightness, 0.5);
+            gl.uniform1f(programInfo.uniformLocations.contrast, 0.5);
+            gl.uniform1f(programInfo.uniformLocations.saturation, 0.5);
 
             function render() {
                 drawScene(gl, programInfo, buffers, texture, video);
                 requestAnimationFrame(render);
             }
             requestAnimationFrame(render);
+
+            setupControls(programInfo);
+        }
+
+        function setupControls(programInfo) {
+            document.getElementById('brightness').addEventListener('input', function() {
+                const brightness = parseFloat(this.value);
+                gl.uniform1f(programInfo.uniformLocations.brightness, brightness);
+                updateDebugInfo(); // Update the display with current settings
+            });
+
+            document.getElementById('contrast').addEventListener('input', function() {
+                const contrast = parseFloat(this.value);
+                gl.uniform1f(programInfo.uniformLocations.contrast, contrast);
+                updateDebugInfo(); // Update the display with current settings
+            });
+
+            document.getElementById('saturation').addEventListener('input', function() {
+                const saturation = parseFloat(this.value);
+                gl.uniform1f(programInfo.uniformLocations.saturation, saturation);
+                updateDebugInfo(); // Update the display with current settings
+            });
         }
 
         function updateDebugInfo() {
             const debugInfo = document.getElementById('debug-info');
-            debugInfo.textContent = `Canvas Width: ${canvas.width}px, Canvas Height: ${canvas.height}px`;
+            //debugInfo.textContent = `Canvas Width: ${canvas.width}px, Canvas Height: ${canvas.height}px`;
+            const brightness = document.getElementById('brightness').value;
+            const contrast = document.getElementById('contrast').value;
+            const saturation = document.getElementById('saturation').value;
+            debugInfo.innerHTML = `Brightness: ${brightness}, Contrast: ${contrast}, Saturation: ${saturation}`;
+
         }
 
         function initShaderProgram(gl, vsSource, fsSource) {
@@ -226,6 +284,10 @@
             gl.clear(gl.COLOR_BUFFER_BIT);
 
             gl.useProgram(programInfo.program);
+            gl.uniform1f(programInfo.uniformLocations.brightness, parseFloat(document.getElementById('brightness').value));
+            gl.uniform1f(programInfo.uniformLocations.contrast, parseFloat(document.getElementById('contrast').value));
+            gl.uniform1f(programInfo.uniformLocations.saturation, parseFloat(document.getElementById('saturation').value));
+
             gl.uniform2f(programInfo.uniformLocations.uResolution, canvas.width, canvas.height); // Set the resolution uniform
 
             // Bind the position buffer.
@@ -247,9 +309,26 @@
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
 
             // Draw the rectangle.
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);// Set initial uniform values
+
+            
         }
 
+        // // Event listeners for sliders
+        // document.getElementById('brightness').addEventListener('input', function() {
+        //     gl.uniform1f(programInfo.uniformLocations.brightness, parseFloat(this.value));
+        //     render();
+        // });
+
+        // document.getElementById('contrast').addEventListener('input', function() {
+        //     gl.uniform1f(programInfo.uniformLocations.contrast, parseFloat(this.value));
+        //     render();
+        // });
+
+        // document.getElementById('saturation').addEventListener('input', function() {
+        //     gl.uniform1f(programInfo.uniformLocations.saturation, parseFloat(this.value));
+        //     render();
+        // });
 
         getCameraStream();
     </script>
