@@ -23,7 +23,7 @@
         canvas {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Ensures canvas fills the screen */
+            object-fit: cover; /* Ensures canvas fills the screen */
         }
     </style>
 </head>
@@ -120,7 +120,7 @@
         
 
         
-
+        
 
         async function getCameraStream() {
             try {
@@ -259,24 +259,33 @@
         }
 
         function initTexture(gl, video) {
+            const aspectRatio = video.videoWidth / video.videoHeight;
             const offScreenCanvas = document.createElement('canvas');
-            offScreenCanvas.width = 1024;
-            offScreenCanvas.height = 1024;
+            if (aspectRatio > 1) { // Landscape
+                offScreenCanvas.width = 1024;
+                offScreenCanvas.height = Math.round(1024 / aspectRatio);
+            } else { // Portrait
+                offScreenCanvas.width = Math.round(1024 * aspectRatio);
+                offScreenCanvas.height = 1024;
+            }
 
-            // Drawing video frame to offScreenCanvas to resize it
             const ctx = offScreenCanvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, 1024, 1024);
+            ctx.drawImage(video, 0, 0, offScreenCanvas.width, offScreenCanvas.height);
+
+            console.log(`Video dimensions: ${video.videoWidth} x ${video.videoHeight}`);
+console.log(`Canvas dimensions set to: ${canvas.width} x ${canvas.height}`);
+console.log(`Off-screen canvas dimensions: ${offScreenCanvas.width} x ${offScreenCanvas.height}`);
 
             const texture = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, texture);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            // Use the off-screen canvas as the source for the texture
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offScreenCanvas);
 
             return texture;
         }
+
 
         function drawScene(gl, programInfo, buffers, texture, video) {
             gl.viewport(0, 0, canvas.width, canvas.height);
@@ -310,10 +319,26 @@
 
             // Draw the rectangle.
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);// Set initial uniform values
-
+            
+            
             
         }
 
+        window.addEventListener('resize', function() {
+            //setupCanvas(canvas, video);
+        });
+
+        function setupCanvas(canvas, video) {
+            const windowRatio = window.innerWidth / window.innerHeight;
+            const videoRatio = video.videoWidth / video.videoHeight;
+            if (windowRatio < videoRatio) {
+                canvas.style.width = '100%';
+                canvas.style.height = 'auto';
+            } else {
+                canvas.style.width = 'auto';
+                canvas.style.height = '100%';
+            }
+        }
         // // Event listeners for sliders
         // document.getElementById('brightness').addEventListener('input', function() {
         //     gl.uniform1f(programInfo.uniformLocations.brightness, parseFloat(this.value));
